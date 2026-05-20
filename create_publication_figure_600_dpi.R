@@ -471,41 +471,56 @@ write.csv(gene_counts_b,
 # -- neglog10p (no pre-clamping; coord_cartesian handles zoom)
 res_b$neglog10p <- -log10(res_b$padj)
 
-# -- Data-driven plot extents (99.9th percentile guards single outliers)
+# -- Plot extents from the ACTUAL data range so NO point is clipped, then
+#    add padding (small gutter on x; generous headroom on y for the count
+#    tables, which live in an empty band above the tallest point).
 finite_x <- res_b$log2FoldChange[is.finite(res_b$log2FoldChange)]
 finite_y <- res_b$neglog10p[is.finite(res_b$neglog10p)]
 
-x_data_max <- max(abs(quantile(finite_x,
-                               probs = c(0.001, 0.999), na.rm = TRUE)))
-y_data_max <- as.numeric(quantile(finite_y, 0.999, na.rm = TRUE))
+x_abs_max <- max(abs(finite_x))
+y_top     <- max(finite_y)
 
-# Guarantee threshold lines and FDR line are visible.
-x_data_max <- max(x_data_max, max(THRESHOLDS) + 0.3)
-y_data_max <- max(y_data_max, -log10(PADJ_CUTOFF) + 0.5)
+# Guarantee threshold lines and the FDR line are inside the frame.
+x_abs_max <- max(x_abs_max, max(THRESHOLDS) + 0.3)
+y_top     <- max(y_top, -log10(PADJ_CUTOFF) + 0.5)
 
-# Padding: enough on x for count annotations, modest on y for breathing room.
-x_lim <- c(-x_data_max * 1.30, x_data_max * 1.30)
-y_lim <- c(0, y_data_max * 1.12)
+x_lim <- c(-x_abs_max * 1.15, x_abs_max * 1.15)
+y_lim <- c(0, y_top * 1.45)   # ~45% headroom holds the count tables clear of points
 
-# -- Annotation placement (relative to dynamic limits)
-ann_x_left   <- x_lim[1] * 0.78
-ann_x_right  <- x_lim[2] * 0.78
-ann_y_top    <- y_lim[2] * 0.95
-ann_y_bottom <- y_lim[2] * 0.55
-y_positions  <- seq(ann_y_top, ann_y_bottom, length.out = length(THRESHOLDS))
+# -- Count tables live in the empty top band (every row sits above y_top, so
+#    they never collide with points or gene labels). Down-regulated counts go
+#    top-left, up-regulated top-right; each row is coloured by its threshold
+#    tier, matching the points and the vertical lines.
+n_thr     <- length(THRESHOLDS)
+header_y  <- y_lim[2] * 0.985
+row_y     <- seq(y_lim[2] * 0.92,
+                 y_lim[2] * 0.92 - (n_thr - 1) * y_lim[2] * 0.05,
+                 length.out = n_thr)
 
-text_annotations_b <- data.frame(
-    x     = c(rep(ann_x_left,  length(THRESHOLDS)),
-              rep(ann_x_right, length(THRESHOLDS))),
-    y     = c(y_positions, y_positions),
-    label = c(paste0(THRESHOLD_LABELS, "\n↓ ", gene_counts_b$Down),
-              paste0(THRESHOLD_LABELS, "\n↑ ", gene_counts_b$Up)),
+ann_x_left  <- x_lim[1] * 0.98   # anchor at left edge,  text grows rightward
+ann_x_right <- x_lim[2] * 0.98   # anchor at right edge, text grows leftward
+
+count_annotations_b <- data.frame(
+    x     = c(rep(ann_x_left,  n_thr), rep(ann_x_right, n_thr)),
+    y     = c(row_y, row_y),
+    label = c(sprintf("↓ %d  (>%.3g)", gene_counts_b$Down, THRESHOLDS),
+              sprintf("↑ %d  (>%.3g)", gene_counts_b$Up,   THRESHOLDS)),
     Color = c(THRESHOLD_COLORS, THRESHOLD_COLORS),
+    hjust = c(rep(0, n_thr), rep(1, n_thr)),
     stringsAsFactors = FALSE
 )
 
-fdr_label_x <- x_lim[2] * 0.92
-fdr_label_y <- -log10(PADJ_CUTOFF) + y_lim[2] * 0.04
+header_annotations_b <- data.frame(
+    x     = c(ann_x_left, ann_x_right),
+    y     = c(header_y, header_y),
+    label = c("Down-regulated", "Up-regulated"),
+    hjust = c(0, 1),
+    stringsAsFactors = FALSE
+)
+
+# FDR label: right-aligned just inside the frame so it never clips the edge.
+fdr_label_x <- x_lim[2] * 0.99
+fdr_label_y <- -log10(PADJ_CUTOFF)
 
 # -- Gene-symbol labels: strict-threshold hits only, real symbols only.
 # res_b$symbol was populated upstream by map_genes_to_symbols().
@@ -530,7 +545,10 @@ alpha_map <- c("ns" = 0.20,
 label_map <- c("ns" = "ns (padj ≥ 0.05 or |log2FC| ≤ 0.585)",
                setNames(THRESHOLD_LABELS, as.character(seq_along(THRESHOLDS))))
 
-vline_df <- data.frame(xintercept = c(-THRESHOLDS, THRESHOLDS))
+vline_df <- data.frame(
+    xintercept = c(-THRESHOLDS, THRESHOLDS),
+    Color      = rep(THRESHOLD_COLORS, 2)
+)
 
 # Pretty title from TARGET_CONTRAST (e.g. "therapy_impact" -> "Therapy Impact")
 contrast_title <- gsub("_", " ", TARGET_CONTRAST)
@@ -543,15 +561,23 @@ p_panel_b_plot <- ggplot(res_b, aes(x = log2FoldChange, y = neglog10p)) +
     scale_alpha_manual(values = alpha_map, guide = "none") +
     geom_hline(yintercept = -log10(PADJ_CUTOFF),
                linetype = "dashed", color = "grey30", linewidth = 0.6) +
-    geom_vline(data = vline_df, aes(xintercept = xintercept),
-               linetype = "dashed", color = "grey60", linewidth = 0.35) +
+    geom_segment(data = vline_df,
+                 aes(x = xintercept, xend = xintercept),
+                 y = -Inf, yend = Inf,
+                 color = vline_df$Color, linetype = "dotted", linewidth = 0.8,
+                 inherit.aes = FALSE) +
     annotate("text", x = fdr_label_x, y = fdr_label_y,
              label = paste0("FDR = ", PADJ_CUTOFF),
-             size = 4, color = "grey30", fontface = "bold") +
-    geom_text(data = text_annotations_b,
-              aes(x = x, y = y, label = label),
-              color = text_annotations_b$Color,
-              size = 3.6, fontface = "bold", hjust = 0.5, vjust = 0.5,
+             size = 4, color = "grey30", fontface = "bold",
+             hjust = 1, vjust = -0.6) +
+    geom_text(data = header_annotations_b,
+              aes(x = x, y = y, label = label, hjust = hjust),
+              color = "grey30", size = 4.2, fontface = "bold",
+              vjust = 1, show.legend = FALSE) +
+    geom_text(data = count_annotations_b,
+              aes(x = x, y = y, label = label, hjust = hjust),
+              color = count_annotations_b$Color,
+              size = 3.8, fontface = "bold", vjust = 0.5,
               show.legend = FALSE) +
     {if (nrow(label_genes) > 0)
         geom_text_repel(data = label_genes,
@@ -567,6 +593,7 @@ p_panel_b_plot <- ggplot(res_b, aes(x = log2FoldChange, y = neglog10p)) +
                         max.overlaps = 25,
                         min.segment.length = 0.1,
                         force = 2,
+                        ylim = c(NA, y_top * 1.02),
                         seed = 12345,
                         inherit.aes = FALSE)
     } +
