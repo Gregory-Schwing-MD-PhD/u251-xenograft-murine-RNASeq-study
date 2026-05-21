@@ -1,0 +1,11 @@
+sample,cohort,environment,role
+C2B,In vitro Culture,In vitro,Out-of-experiment reference (PCA / clustering)
+IL67B,Primary (Pre-LITT),In vivo,DE cohort
+IL68B,Primary (Pre-LITT),In vivo,DE cohort
+IL69B,Primary (Pre-LITT),In vivo,DE cohort
+IL66B,Recurrent (Post-LITT),In vivo,DE cohort
+NL70B,Recurrent (Post-LITT),In vivo,DE cohort
+NL71B,Recurrent (Post-LITT),In vivo,DE cohort
+IL64B,Control (failed graft),In vivo,RUVSeq contamination anchor (excluded from DE)
+N168B,Control (procedural),In vivo,RUVSeq contamination anchor (excluded from DE)
+N269B,Control (procedural),In vivo,RUVSeq contamination anchor (excluded from DE)
