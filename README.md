@@ -12,7 +12,22 @@ While U251 is a widely used model, classic profiling shows that gene expression 
 
 ## Experimental Design & Sample Cohorts
 
-This dataset comprises four distinct biological groups representing the trajectory of tumor evolution and relevant controls.
+This dataset comprises four distinct biological groups representing the trajectory of tumor evolution and relevant controls. All **ten** sequenced libraries are summarized below; the `graft` / `host` columns are the xengsort read-classification percentages (human vs. rat), which double as the rationale for the contamination-adjustment analysis in [Phase 2B](#phase-2b-contamination-adjustment-sensitivity-analysis-ruvseq).
+
+| Sample | Cohort                 | Environment | graft % | host % | Role in analysis                                  |
+| ------ | ---------------------- | ----------- | ------- | ------ | ------------------------------------------------- |
+| C2B    | In vitro Culture       | In vitro    | 86.19   | 0.46   | Out-of-experiment reference (PCA / clustering)    |
+| IL67B  | Primary (Pre-LITT)     | In vivo     | 42.52   | 48.40  | DE cohort                                         |
+| IL68B  | Primary (Pre-LITT)     | In vivo     | 45.38   | 45.37  | DE cohort                                         |
+| IL69B  | Primary (Pre-LITT)     | In vivo     | 64.40   | 25.64  | DE cohort                                         |
+| IL66B  | Recurrent (Post-LITT)  | In vivo     | 29.44   | 59.17  | DE cohort                                         |
+| NL70B  | Recurrent (Post-LITT)  | In vivo     | 42.67   | 48.25  | DE cohort                                         |
+| NL71B  | Recurrent (Post-LITT)  | In vivo     | 33.05   | 59.23  | DE cohort                                         |
+| IL64B  | Control (failed graft) | In vivo     | 0.33    | 93.59  | RUVSeq contamination anchor (excluded from DE)    |
+| N168B  | Control (procedural)   | In vivo     | 0.55    | 93.57  | RUVSeq contamination anchor (excluded from DE)    |
+| N269B  | Control (procedural)   | In vivo     | 4.90    | 86.95  | RUVSeq contamination anchor (excluded from DE)    |
+
+The graft-fraction gradient is the key methodological point: Primary tumors retain a higher human fraction (median ~45%) than Recurrent tumors (median ~33%), and the three Control samples are essentially rat brain (≤ ~5% graft). That difference is what motivates Phase 2B.
 
 ### 1. In Vitro Culture (Baseline)
 
@@ -24,7 +39,7 @@ This dataset comprises four distinct biological groups representing the trajecto
 ### 2. Primary Orthotopic Xenograft (Pre-LITT)
 
 - **Sample IDs (DE cohort):** `IL67B`, `IL68B`, `IL69B`
-- **Note:** A fourth sequenced Primary tumor (`IL64B`) was excluded from the DE analysis for technical reasons; it is not present in `ANALYSIS/metadata_therapy.csv`.
+- **Note:** `IL64B` was implanted on the same protocol but **failed to establish a graft** (~0.3% human reads — effectively rat brain). It is therefore treated as a Control (see §4), excluded from the DE cohort (`ANALYSIS/metadata_therapy.csv`), and used as a contamination anchor in [Phase 2B](#phase-2b-contamination-adjustment-sensitivity-analysis-ruvseq) rather than as a Primary tumor.
 - **Model:** Adult female immunodeficient **RNU/RNU rats**.
 - **Implantation:** $5 \times 10^5$ U251 cells stereotactically injected into the **striatum** (Coordinates: 3.5 mm right of bregma, depth 3.0 mm).
 - **Tumor Status:** Tumors were allowed to establish and grow for approximately 2 weeks (reaching ~4 mm diameter) as confirmed by MRI and dynamic contrast-enhanced (DCE) imaging prior to intervention.
@@ -39,9 +54,9 @@ This dataset comprises four distinct biological groups representing the trajecto
 
 ### 4. Control Samples
 
-- **Sample IDs:** `N168B`, `N269B`
-- **Description:** Non-tumor brain tissue or procedural controls.
-- **Purpose:** Provides a negative control background for normalizing tumor-specific expression and identifying non-specific sequencing artifacts.
+- **Sample IDs:** `IL64B`, `N168B`, `N269B`
+- **Description:** In-vivo rat brain with negligible human graft (≤ ~5% graft reads). `N168B` and `N269B` are procedural controls; `IL64B` was an implantation that failed to establish a graft (~0.3% graft). All three are biologically rat tissue.
+- **Purpose:** Two-fold. (1) A negative-control background for identifying non-specific sequencing artifacts. (2) Because they passed through the identical xengsort + Salmon pipeline, any human-gene signal they carry is, by construction, **residual cross-species contamination** — making them the empirical anchor for the RUVSeq adjustment in [Phase 2B](#phase-2b-contamination-adjustment-sensitivity-analysis-ruvseq). They are not part of the Primary-vs-Recurrent DE contrast.
 
 ### Key Reference for Methodology
 
@@ -247,7 +262,7 @@ The DE cohort is exactly the 6 samples in `ANALYSIS/metadata_therapy.csv`:
 | NL70B  | Recurrent_U2   | In_Vivo     |
 | NL71B  | Recurrent_U2   | In_Vivo     |
 
-The in vitro Culture sample (`C2B`) is **not in the DE model.** It is retained only as an out-of-experiment reference for exploratory PCA / clustering / distance analyses, never as input to a DESeq2 fit or Wald test. A fourth Primary tumor (`IL64B`) was sequenced but excluded from the DE cohort for technical reasons. The single contrast (`Recurrent_U2` vs. `Primary_U2`) is declared in `ANALYSIS/contrasts_therapy.csv`.
+The in vitro Culture sample (`C2B`) is **not in the DE model.** It is retained only as an out-of-experiment reference for exploratory PCA / clustering / distance analyses, never as input to a DESeq2 fit or Wald test. The three Control samples (`IL64B`, `N168B`, `N269B`; failed-graft / procedural rat brain) are likewise excluded from this contrast, but are used as the contamination anchor in [Phase 2B](#phase-2b-contamination-adjustment-sensitivity-analysis-ruvseq). The single contrast (`Recurrent_U2` vs. `Primary_U2`) is declared in `ANALYSIS/contrasts_therapy.csv`.
 
 #### How to run it
 
