@@ -4,8 +4,8 @@ max_cpus: 16
 deseq2_cores: 8
 
 # --- INPUTS ---
-gtf: "/wsu/home/go/go24/go2432/u251-transcriptomic-evolution/ANALYSIS/refs/human/GRCh38.primary_assembly.annotation.gtf.gz"
-gene_sets_files: "/wsu/home/go/go24/go2432/u251-transcriptomic-evolution/ANALYSIS/refs/pathways/human/combined_human.gmt"
+gtf: "ANALYSIS/refs/human/GRCh38.primary_assembly.annotation.gtf.gz"
+gene_sets_files: "ANALYSIS/refs/pathways/human/combined_human.gmt"
 # --- GSEA (small-N safe) ---
 gsea_run: true
 gsea_permute: "gene_set"          # required for N<7

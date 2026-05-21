@@ -129,8 +129,8 @@ chmod 600 ~/.gdrive_token
 ### Step 1 — Clone the repository
 
 ```bash
-git clone <repo-url> u251-transcriptomic-evolution
-cd u251-transcriptomic-evolution
+git clone <repo-url> u251-xenograft-murine-RNASeq-study
+cd u251-xenograft-murine-RNASeq-study
 ```
 
 ### Step 2 — Download raw FASTQs from Google Drive

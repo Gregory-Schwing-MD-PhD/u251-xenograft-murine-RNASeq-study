@@ -22,7 +22,7 @@ export XDG_RUNTIME_DIR="${HOME}/xdr"
 mkdir -p $XDG_RUNTIME_DIR
 
 # Nextflow work directory (scratch for intermediate files)
-export WORK_DIR="${HOME}/u251-transcriptomic-evolution/work"
+export WORK_DIR="$(pwd)/work"
 mkdir -p $WORK_DIR
 
 # 3. Singularity Image Prep
@@ -41,8 +41,8 @@ find .nextflow/cache -name "LOCK" -delete 2>/dev/null
 echo "RUNNING STEP 1: XENGSORT"
 nextflow run main.nf -profile singularity \
     --input "ANALYSIS/samplesheet.csv" \
-    --host_fasta "/wsu/home/go/go24/go2432/u251-transcriptomic-evolution/ANALYSIS/refs/rat/Rattus_norvegicus.mRatBN7.2.dna.toplevel.fa.gz" \
-    --graft_fasta "/wsu/home/go/go24/go2432/u251-transcriptomic-evolution/ANALYSIS/refs/human/GRCh38.primary_assembly.genome.fa.gz" \
+    --host_fasta "ANALYSIS/refs/rat/Rattus_norvegicus.mRatBN7.2.dna.toplevel.fa.gz" \
+    --graft_fasta "ANALYSIS/refs/human/GRCh38.primary_assembly.genome.fa.gz" \
     --outdir "ANALYSIS" \
     -w "${WORK_DIR}" \
     -resume -ansi-log false

@@ -10,3 +10,32 @@ ANALYSIS/results_ruvseq/*
 # SLURM job logs
 slurm_logs/*
 !slurm_logs/.gitkeep
+
+# ------------------------------------------------------------------------------
+# Large pipeline data and outputs reused from the upstream run (moved or
+# symlinked in from the previous working dir). Never committed -- the repo holds
+# the code/config to regenerate them, not the data itself.
+# ------------------------------------------------------------------------------
+# Raw + sorted reads
+DATA/RNASEQ/RAW/downloaded_files/
+ANALYSIS/sorted_fastqs/
+
+# xengsort index + per-sample classify logs
+ANALYSIS/xengsort_index_clean/
+ANALYSIS/xengsort_out/
+
+# nf-core/rnaseq + differentialabundance outputs
+ANALYSIS/results_human_final/
+ANALYSIS/results_therapy_v3/
+
+# Reference genomes / annotations / pathway databases (downloaded, not authored)
+ANALYSIS/refs/
+
+# Nextflow scratch + run state
+work/
+.nextflow/
+.nextflow.log*
+
+# SLURM logs written at the repo root by run_*.sh / submit_*.sh
+*.out
+*.err
