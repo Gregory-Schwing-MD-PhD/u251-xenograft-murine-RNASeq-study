@@ -181,3 +181,10 @@ RUN R -e "install.packages(c('cowplot', 'magick', 'tibble', 'gridExtra'), repos=
 RUN R -e "install.packages('ggtext', repos='http://cran.rstudio.com/')"
 
 WORKDIR /data
+
+# ------------------------------------------------------------------------------
+# LAYER 26: RUVSeq contamination adjustment (RUVs)
+# Pulls EDASeq + edgeR as dependencies. Appended last so layers 1-25 stay
+# cached when this is added/rebuilt.
+# ------------------------------------------------------------------------------
+RUN R -e "BiocManager::install('RUVSeq', update = FALSE, ask = FALSE)"
