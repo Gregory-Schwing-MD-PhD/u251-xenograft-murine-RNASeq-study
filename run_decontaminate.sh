@@ -42,8 +42,10 @@ COUNTS="ANALYSIS/results_human_final/star_salmon/salmon.merged.gene_counts.tsv"
 LENGTHS="ANALYSIS/results_human_final/star_salmon/salmon.merged.gene_lengths.tsv"
 METADATA="ANALYSIS/metadata_base.csv"
 OUT_DIR="ANALYSIS/results_decontamination"
-CPM_CUTOFF="${1:-1}"        # optional 1st arg: CPM cutoff (default 1)
-MIN_CONTROLS="${2:-2}"      # optional 2nd arg: min controls (default 2)
+CPM_CUTOFF="${1:-1}"        # arg 1: CPM cutoff for absolute mode (default 1)
+MIN_CONTROLS="${2:-2}"      # arg 2: min controls for absolute mode (default 2)
+MODE="${3:-absolute}"       # arg 3: "absolute" or "ratio" (default absolute)
+RATIO_THRESHOLD="${4:-0.5}" # arg 4: control/tumor ratio for ratio mode (default 0.5)
 
 mkdir -p "$OUT_DIR" slurm_logs
 
@@ -59,7 +61,11 @@ if [[ ! -f "$IMG_PATH" ]]; then
     singularity pull "$IMG_PATH" docker://go2432/bioconductor:latest
 fi
 echo "Container ready: $IMG_PATH"
-echo "Rule: CPM >= ${CPM_CUTOFF} in >= ${MIN_CONTROLS} controls"
+if [ "$MODE" = "ratio" ]; then
+    echo "Rule: RATIO -- control/tumor CPM >= ${RATIO_THRESHOLD}"
+else
+    echo "Rule: ABSOLUTE -- CPM >= ${CPM_CUTOFF} in >= ${MIN_CONTROLS} controls"
+fi
 
 set +e
 singularity exec --bind "$PWD:/data" --pwd /data "$IMG_PATH" \
@@ -69,7 +75,9 @@ singularity exec --bind "$PWD:/data" --pwd /data "$IMG_PATH" \
     "/data/$METADATA" \
     "/data/$OUT_DIR" \
     "$CPM_CUTOFF" \
-    "$MIN_CONTROLS"
+    "$MIN_CONTROLS" \
+    "$MODE" \
+    "$RATIO_THRESHOLD"
 exit_code=$?
 set -e
 

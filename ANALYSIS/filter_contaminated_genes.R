@@ -34,7 +34,10 @@ META    <- if (length(args) >= 3) args[3] else "ANALYSIS/metadata_base.csv"
 OUTDIR  <- if (length(args) >= 4) args[4] else "ANALYSIS/results_decontamination"
 CPM_CUTOFF   <- if (length(args) >= 5) as.numeric(args[5]) else 1
 MIN_CONTROLS <- if (length(args) >= 6) as.integer(args[6]) else 2L
-SWEEP_CUTOFFS <- c(0.5, 1, 5)
+MODE         <- if (length(args) >= 7) tolower(args[7]) else "absolute"  # "absolute" | "ratio"
+RATIO_THRESHOLD <- if (length(args) >= 8) as.numeric(args[8]) else 0.5
+SWEEP_CUTOFFS <- c(0.5, 1, 5)        # absolute mode: CPM cutoffs (>= MIN_CONTROLS controls)
+SWEEP_RATIOS  <- c(0.25, 0.5, 1.0)   # ratio mode: control/tumor CPM thresholds
 
 dir.create(OUTDIR, showWarnings = FALSE, recursive = TRUE)
 say <- function(...) cat(..., "\n")
@@ -80,32 +83,47 @@ libsize <- colSums(mat)
 cpm <- sweep(mat, 2, libsize, "/") * 1e6
 ctrl_cpm <- cpm[, controls, drop = FALSE]
 
-# --- sweep: how many genes get flagged at each cutoff / control count ---
-sweep_tbl <- do.call(rbind, lapply(SWEEP_CUTOFFS, function(cut) {
-    det <- rowSums(ctrl_cpm >= cut)
-    data.frame(cpm_cutoff = cut,
-               genes_ge1_control = sum(det >= 1),
-               genes_ge2_control = sum(det >= 2),
-               genes_ge3_control = sum(det >= 3))
-}))
-say("Removed-gene sweep (genes detected in >= k of", length(controls), "controls):")
-print(sweep_tbl)
+# Per-gene contamination metrics used by both modes.
+mean_ctrl_cpm  <- rowMeans(ctrl_cpm)
+mean_tumor_cpm <- if (length(tumors)) rowMeans(cpm[, tumors, drop = FALSE]) else rep(NA_real_, nrow(cpm))
+# control/tumor ratio: genes with ~no tumor expression count as fully contaminated
+contam_ratio   <- ifelse(mean_tumor_cpm > 0, mean_ctrl_cpm / mean_tumor_cpm, Inf)
+det            <- rowSums(ctrl_cpm >= CPM_CUTOFF)   # n controls passing the CPM cutoff
+
+# --- sweep + primary flag (mode-dependent) ---
+if (MODE == "ratio") {
+    say("Mode: RATIO -- drop if mean control CPM / mean tumor CPM >= threshold")
+    sweep_tbl <- do.call(rbind, lapply(SWEEP_RATIOS, function(r)
+        data.frame(ratio_threshold = r, genes_flagged = sum(contam_ratio >= r))))
+    say("Removed-gene sweep (control/tumor CPM ratio):"); print(sweep_tbl)
+    contaminated <- contam_ratio >= RATIO_THRESHOLD
+    rule_desc <- sprintf("control/tumor ratio >= %.3g", RATIO_THRESHOLD)
+} else {
+    say("Mode: ABSOLUTE -- drop if CPM >= cutoff in >= min_controls controls")
+    sweep_tbl <- do.call(rbind, lapply(SWEEP_CUTOFFS, function(cut) {
+        d <- rowSums(ctrl_cpm >= cut)
+        data.frame(cpm_cutoff = cut, genes_ge1_control = sum(d >= 1),
+                   genes_ge2_control = sum(d >= 2), genes_ge3_control = sum(d >= 3))
+    }))
+    say("Removed-gene sweep (genes detected in >= k of", length(controls), "controls):")
+    print(sweep_tbl)
+    contaminated <- det >= MIN_CONTROLS
+    rule_desc <- sprintf("CPM >= %.3g in >= %d controls", CPM_CUTOFF, MIN_CONTROLS)
+}
 write.csv(sweep_tbl, file.path(OUTDIR, "decontamination_sweep.csv"), row.names = FALSE)
 
-# --- primary flag ---
-det <- rowSums(ctrl_cpm >= CPM_CUTOFF)
-contaminated <- det >= MIN_CONTROLS
 keep_set <- ct$ids[!contaminated]
-say(sprintf("\nPrimary rule -> total %d | drop %d | retain %d genes",
-            length(ct$ids), sum(contaminated), length(keep_set)))
+say(sprintf("\nPrimary rule [%s] -> total %d | drop %d | retain %d genes",
+            rule_desc, length(ct$ids), sum(contaminated), length(keep_set)))
 
 # --- dropped-gene report (transparency) ---
 report <- data.frame(
     gene_id = ct$ids,
     gene_name = if (ct$has_name) ct$df[[2]] else NA_character_,
     n_controls_detected = det,
-    mean_control_cpm = round(rowMeans(ctrl_cpm), 3),
-    mean_tumor_cpm = if (length(tumors)) round(rowMeans(cpm[, tumors, drop = FALSE]), 3) else NA_real_,
+    mean_control_cpm = round(mean_ctrl_cpm, 3),
+    mean_tumor_cpm = round(mean_tumor_cpm, 3),
+    contam_ratio = round(contam_ratio, 3),
     stringsAsFactors = FALSE)
 for (s in controls) report[[paste0("cpm_", s)]] <- round(ctrl_cpm[, s], 3)
 report <- report[contaminated, ]
