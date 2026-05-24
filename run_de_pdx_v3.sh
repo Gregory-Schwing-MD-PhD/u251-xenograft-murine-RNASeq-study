@@ -39,8 +39,8 @@ nextflow run nf-core/differentialabundance \
     -profile singularity \
     --input "$(pwd)/ANALYSIS/metadata_therapy.csv" \
     --contrasts "$(pwd)/ANALYSIS/contrasts_therapy.csv" \
-    --matrix "$(pwd)/ANALYSIS/results_human_final/star_salmon/salmon.merged.gene_counts.tsv" \
-    --transcript_length_matrix "$(pwd)/ANALYSIS/results_human_final/star_salmon/salmon.merged.gene_lengths.tsv" \
+    --matrix "$(pwd)/ANALYSIS/results_human_final/star_salmon/salmon.merged.gene_counts.decontaminated.tsv" \
+    --transcript_length_matrix "$(pwd)/ANALYSIS/results_human_final/star_salmon/salmon.merged.gene_lengths.decontaminated.tsv" \
     --shinyngs_build_app \
     -params-file therapy_v3_params.yaml \
     -w "${WORK_DIR}" \
