@@ -164,7 +164,9 @@ top_n_ids <- function(df, n = 20) {
 # Build a results data.frame from a DESeqDataSet for the Recurrent-vs-Primary
 # contrast (log2FC > 0 means up in Recurrent), with gene_id + symbol columns.
 extract_results <- function(dds) {
-    res <- results(dds, contrast = c("Classification", "Recurrent", "Primary"))
+    # independentFiltering = TRUE (default alpha) matches differentialabundance's results()
+    res <- results(dds, contrast = c("Classification", "Recurrent", "Primary"),
+                   independentFiltering = TRUE)
     df  <- as.data.frame(res)
     df$gene_id <- rownames(df)
     df$symbol  <- map_genes_to_symbols(df$gene_id)
@@ -235,10 +237,15 @@ if (length(ctrl_samples) < 2) stop("RUVs needs >= 2 Control replicates.")
 # ==============================================================================
 # STEP 2: PRE-FILTER LOW-COUNT GENES
 # ==============================================================================
-cat("[2/10] Pre-filtering (count >= 10 in >= 3 samples)...\n")
-keep <- rowSums(counts >= 10) >= 3
-counts <- counts[keep, , drop = FALSE]
-cat("    Genes retained:", nrow(counts), "\n\n")
+cat("[2/10] Pre-filtering...\n")
+# Two filters, kept deliberately separate:
+#  - counts_ruv: a stable expressed set for RUV W-estimation + PCA
+#    (count >= 10 in >= 3 of the 9 samples). `counts` stays the full matrix.
+#  - the DE step re-filters per contrast to match differentialabundance exactly
+#    (count >= 10 in >= 1 contrast sample); see fit_matched_deseq() below.
+counts_ruv <- counts[rowSums(counts >= 10) >= 3, , drop = FALSE]
+cat("    Genes for RUV/PCA (>=10 in >=3 of 9):", nrow(counts_ruv), "\n")
+cat("    (DE gene set filtered separately to match differentialabundance.)\n\n")
 
 # ==============================================================================
 # STEP 3: BUILD SeqExpressionSet + RUVs REPLICATE INDEX (scIdx)
@@ -246,16 +253,16 @@ cat("    Genes retained:", nrow(counts), "\n\n")
 cat("[3/10] Building SeqExpressionSet and Control replicate index...\n")
 
 set <- newSeqExpressionSet(
-    counts,
+    counts_ruv,
     phenoData = data.frame(Classification = meta$Classification,
-                           row.names = colnames(counts)))
+                           row.names = colnames(counts_ruv)))
 # Upper-quartile between-lane normalisation (canonical RUVSeq pre-step). Used
 # only inside RUVs to estimate W; raw counts are passed to DESeq2 separately.
 set <- betweenLaneNormalization(set, which = "upper")
 
 # scIdx: one replicate group = the Control samples (their indices into the
 # columns of `set`). A single group needs no -1 padding.
-ctrl_idx <- match(ctrl_samples, colnames(counts))
+ctrl_idx <- match(ctrl_samples, colnames(counts_ruv))
 scIdx <- matrix(ctrl_idx, nrow = 1)
 cat("    scIdx (Control sample column indices):", paste(ctrl_idx, collapse = ", "), "\n")
 cat("    NOTE: a single 3-replicate group spans <= 2 effective factors;\n")
@@ -266,6 +273,26 @@ cat("          k=3 is reported for completeness but may be near-degenerate.\n\n"
 # ==============================================================================
 cat("[4/10 + 5/10] Estimating W and running adjusted DESeq2 per k...\n")
 
+# --- DESeq2 parameterization matched to nf-core/differentialabundance v1.5.0 ---
+# Verified against the pipeline's deseq_de.R + therapy_v3_params.yaml so the
+# RUVSeq-adjusted DE differs from the differentialabundance baseline ONLY by the
+# added W covariate(s):
+#   filter   : raw count >= 10 in >= 1 contrast sample (filtering_min_abundance=10,
+#              filtering_min_samples=1, applied after subset_to_contrast_samples)
+#   DESeq()  : Wald test, parametric fit, ratio size factors, betaPrior=FALSE,
+#              minReplicatesForReplace=99 (deseq2_min_replicates_for_replace;
+#              moot at n=3 but set for exactness)
+#   results(): independentFiltering=TRUE (see extract_results)
+DA_MIN_ABUNDANCE <- 10
+DA_MIN_SAMPLES   <- 1
+fit_matched_deseq <- function(count_mat, coldata, design_form) {
+    keep <- rowSums(count_mat >= DA_MIN_ABUNDANCE) >= DA_MIN_SAMPLES
+    dds <- DESeqDataSetFromMatrix(countData = count_mat[keep, , drop = FALSE],
+                                  colData = coldata, design = design_form)
+    DESeq(dds, test = "Wald", fitType = "parametric", sfType = "ratio",
+          betaPrior = FALSE, minReplicatesForReplace = 99)
+}
+
 W_list   <- list()   # full (9-sample) W per k, for PCA + export
 de_list  <- list()   # adjusted DE result data.frame per k
 
@@ -275,7 +302,7 @@ run_adjusted_de <- function(k) {
     Wcols <- grep("^W_", colnames(pData(ruv)), value = TRUE)
     W <- as.matrix(pData(ruv)[, Wcols, drop = FALSE])
     colnames(W) <- paste0("W_", seq_len(ncol(W)))
-    rownames(W) <- colnames(counts)
+    rownames(W) <- colnames(counts_ruv)
     W_list[[as.character(k)]] <<- W
     cat("    estimated W with", ncol(W), "factor(s)\n")
 
@@ -290,11 +317,7 @@ run_adjusted_de <- function(k) {
     design_form  <- as.formula(paste("~", paste(design_terms, collapse = " + ")))
     cat("    design:", deparse(design_form), "\n")
 
-    dds <- DESeqDataSetFromMatrix(
-        countData = counts[, contrast_samples, drop = FALSE],
-        colData   = cd,
-        design    = design_form)
-    dds <- DESeq(dds)
+    dds <- fit_matched_deseq(counts[, contrast_samples, drop = FALSE], cd, design_form)
     extract_results(dds)
 }
 
@@ -322,11 +345,7 @@ cd0 <- data.frame(
     Classification = factor(meta[contrast_samples, "Classification"],
                             levels = c("Primary", "Recurrent")),
     row.names = contrast_samples)
-dds0 <- DESeqDataSetFromMatrix(
-    countData = counts[, contrast_samples, drop = FALSE],
-    colData   = cd0,
-    design    = ~ Classification)
-dds0 <- DESeq(dds0)
+dds0 <- fit_matched_deseq(counts[, contrast_samples, drop = FALSE], cd0, ~ Classification)
 res_baseline <- extract_results(dds0)
 write_de_tsv(res_baseline, file.path(OUT_DIR, "ruvseq_baseline_de.tsv"))
 cat("\n")
@@ -386,9 +405,9 @@ cat("[8/10] PCA before/after adjustment + silhouettes...\n")
 # the estimated W effect -- the scientifically correct way to visualise RUV
 # adjustment (cf. limma::removeBatchEffect).
 dds_all <- DESeqDataSetFromMatrix(
-    countData = counts,
+    countData = counts_ruv,
     colData   = data.frame(Classification = meta$Classification,
-                           row.names = colnames(counts)),
+                           row.names = colnames(counts_ruv)),
     design    = ~ Classification)
 vsd_all <- vst(dds_all, blind = TRUE)
 mat_all <- assay(vsd_all)
