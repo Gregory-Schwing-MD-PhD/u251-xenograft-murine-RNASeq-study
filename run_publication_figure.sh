@@ -132,9 +132,9 @@ echo "╚═══════════════════════�
 echo ""
 
 required_outputs=(
-    "$OUT_DIR/Publication_Figure_9Panel.png"
-    "$OUT_DIR/Publication_Figure_9Panel.pdf"
-    "$OUT_DIR/Figure_Captions.txt"
+    "$OUT_DIR/Publication_Figure_9Panel_VOLCANO_COMPLETE.png"
+    "$OUT_DIR/Publication_Figure_9Panel_VOLCANO_COMPLETE.pdf"
+    "$OUT_DIR/Figure_Caption.txt"
 )
 
 all_present=true
@@ -146,6 +146,17 @@ for output in "${required_outputs[@]}"; do
         echo "✗ MISSING: $output"
         all_present=false
     fi
+done
+
+# Optional machine-readable drug-discovery reports (only present when drug
+# discovery ran for this contrast). Reported but not required -> no failure.
+echo ""
+echo "Drug-discovery reports (optional):"
+for opt in \
+    "$OUT_DIR/${TARGET_CONTRAST}_LLM_Drug_Discovery_Report.txt" \
+    "$OUT_DIR/${TARGET_CONTRAST}_Drug_Profiles_Comprehensive.csv" \
+    "$OUT_DIR/${TARGET_CONTRAST}_Drug_Discovery_Report.html"; do
+    if [ -f "$opt" ]; then echo "✓ $opt"; else echo "○ not generated: $opt"; fi
 done
 
 if [ "$all_present" = false ]; then
@@ -165,9 +176,11 @@ echo ""
 echo "📊 GENERATED OUTPUTS:"
 echo ""
 echo "Main Figure:"
-echo "  • PNG (high-res): $OUT_DIR/Publication_Figure_9Panel.png"
-echo "  • PDF (vector):   $OUT_DIR/Publication_Figure_9Panel.pdf"
-echo "  • Captions:       $OUT_DIR/Figure_Captions.txt"
+echo "  • PNG (high-res): $OUT_DIR/Publication_Figure_9Panel_VOLCANO_COMPLETE.png"
+echo "  • PDF (vector):   $OUT_DIR/Publication_Figure_9Panel_VOLCANO_COMPLETE.pdf"
+echo "  • Captions:       $OUT_DIR/Figure_Caption.txt"
+echo "  • LLM report:     $OUT_DIR/${TARGET_CONTRAST}_LLM_Drug_Discovery_Report.txt"
+echo "  • Drug CSV:       $OUT_DIR/${TARGET_CONTRAST}_Drug_Profiles_Comprehensive.csv"
 echo ""
 echo "Panel Layout (3×3 grid):"
 echo "  A. Experimental Design (Gemini visual abstract)"
@@ -182,7 +195,7 @@ echo "  I. Top 5 Drug Candidates (integrated scoring)"
 echo ""
 echo "📝 PANEL DESCRIPTIONS:"
 echo ""
-cat "$OUT_DIR/Figure_Captions.txt"
+cat "$OUT_DIR/Figure_Caption.txt"
 echo ""
 echo "════════════════════════════════════════════════════════════════"
 echo "                    ANALYSIS COMPLETE"
