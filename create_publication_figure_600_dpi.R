@@ -1336,3 +1336,153 @@ cat("\n✅ Publication figure complete!\n")
 cat(sprintf("   PNG: %s/Publication_Figure_9Panel_VOLCANO_COMPLETE.png\n", OUT_DIR))
 cat(sprintf("   PDF: %s/Publication_Figure_9Panel_VOLCANO_COMPLETE.pdf\n", OUT_DIR))
 cat(sprintf("   Caption: %s/Figure_Caption.txt\n", OUT_DIR))
+
+# ==============================================================================
+# MACHINE-READABLE DRUG-DISCOVERY REPORTS  (CSV + LLM text + HTML)
+# Mirrors the exports of run_pathways_drugs_v6, but driven by THIS script's
+# drug_profiles, which are ranked by integrated_score = |NES|^1.5 x BBB
+# (calculate_integrated_score above). No log(target count) term.
+# ==============================================================================
+write_drug_discovery_reports <- function(drug_profiles, pathway_results, res_df,
+                                         out_dir, contrast,
+                                         padj_cut = PADJ_CUTOFF, lfc_cut = LOG2FC_CUTOFF) {
+    cat("Writing drug-discovery reports (CSV / LLM / HTML)...\n")
+    g   <- function(x, d = NA) if (!is.null(x) && length(x) == 1 && !is.na(x)) x else d
+    num <- function(x) suppressWarnings(as.numeric(g(x)))
+    esc <- function(x) { x <- as.character(x); x <- gsub("&", "&amp;", x)
+                         x <- gsub("<", "&lt;", x); gsub(">", "&gt;", x) }
+
+    # DE summary (Recurrent vs Primary)
+    n_up <- sum(res_df$padj < padj_cut & res_df$log2FoldChange >  lfc_cut, na.rm = TRUE)
+    n_dn <- sum(res_df$padj < padj_cut & res_df$log2FoldChange < -lfc_cut, na.rm = TRUE)
+
+    # top enriched pathways
+    top_paths <- NULL
+    if (!is.null(pathway_results) && nrow(pathway_results) > 0) {
+        pp <- pathway_results[!is.na(pathway_results$p.adjust) & pathway_results$p.adjust < padj_cut, , drop = FALSE]
+        if (nrow(pp) > 0) top_paths <- head(pp[order(-abs(pp$NES)), , drop = FALSE], 20)
+    }
+    # PPI hubs, if Panel E produced them
+    hubs <- if (exists("hub_list", envir = .GlobalEnv)) get("hub_list", envir = .GlobalEnv) else NULL
+
+    if (is.null(drug_profiles) || length(drug_profiles) == 0) {
+        cat("  No drug profiles available; skipping drug reports.\n"); return(invisible(NULL))
+    }
+
+    # build the ranked drug table
+    drug_df <- do.call(rbind, lapply(drug_profiles, function(p) {
+        ch <- p$chembl; bb <- p$bbb
+        data.frame(
+            Rank = g(p$rank), Drug = clean_drug_name(p$drug_name),
+            NES = round(num(p$NES), 3), FDR = signif(num(p$p.adjust), 3),
+            IntegratedScore = round(num(p$integrated_score), 3),
+            BBB_Score = round(num(p$bbb_component), 3),
+            BBB_Prediction = g(bb$bbb_prediction),
+            Max_Phase = num(ch$max_phase), MW = num(ch$molecular_weight),
+            LogP = num(ch$alogp), PSA = num(ch$psa),
+            HBA = num(ch$hba), HBD = num(ch$hbd),
+            Lipinski_Violations = num(ch$ro5_violations),
+            Pathway_Hits = g(p$pathway_count, 0),
+            Clinical_Trials = g(p$clinical_trials, 0),
+            ChEMBL_ID = g(ch$chembl_id), Source = g(ch$source),
+            Targets = if (!is.null(ch$targets) && length(ch$targets) > 0)
+                paste(ch$targets, collapse = ";") else NA,
+            stringsAsFactors = FALSE)
+    }))
+    drug_df <- drug_df[order(drug_df$Rank), , drop = FALSE]
+
+    csv_path <- file.path(out_dir, paste0(contrast, "_Drug_Profiles_Comprehensive.csv"))
+    write.csv(drug_df, csv_path, row.names = FALSE)
+    cat("  wrote", csv_path, "(", nrow(drug_df), "drugs )\n")
+
+    # ---- LLM text report ----
+    L <- character(0); add <- function(...) L[[length(L) + 1L]] <<- paste0(...)
+    add("================================================================================")
+    add("  DRUG-DISCOVERY LLM REPORT - U251 GBM | contrast: ", contrast)
+    add("  Generated: ", as.character(Sys.Date()))
+    add("  Integrated Score = |NES|^1.5 x BBB_penetration   (higher = better; no target term)")
+    add("  Drugs ranked by Integrated Score (clusterProfiler GSEA on DSigDB).")
+    add("================================================================================")
+    add("")
+    add("DIFFERENTIAL EXPRESSION (", contrast, ", padj<", padj_cut, " & |log2FC|>", lfc_cut, "):")
+    add("  Upregulated:   ", n_up, " genes")
+    add("  Downregulated: ", n_dn, " genes")
+    add("")
+    if (!is.null(top_paths)) {
+        add("TOP ENRICHED PATHWAYS (FDR<", padj_cut, ", by |NES|):")
+        for (i in seq_len(nrow(top_paths)))
+            add(sprintf("  %2d. %-50s NES=%+.2f  FDR=%.2g", i,
+                        substr(as.character(top_paths$ID[i]), 1, 50),
+                        top_paths$NES[i], top_paths$p.adjust[i]))
+        add("")
+    }
+    if (!is.null(hubs) && length(hubs) > 0)
+        add("PPI HUB GENES (top by degree): ", paste(head(hubs, 15), collapse = ", "), "\n")
+    add("TOP DRUG CANDIDATES (ranked by Integrated Score = |NES|^1.5 x BBB):")
+    add("--------------------------------------------------------------------------------")
+    for (i in seq_len(min(nrow(drug_df), 50))) {
+        d <- drug_df[i, ]
+        add(sprintf("RANK %s: %s", g(d$Rank, "?"), d$Drug))
+        add(sprintf("   IntegratedScore=%s | NES=%s | FDR=%s | BBB=%s (%s) | clinical_phase=%s",
+                    g(d$IntegratedScore, "NA"), g(d$NES, "NA"), g(d$FDR, "NA"),
+                    g(d$BBB_Score, "NA"), g(d$BBB_Prediction, "NA"), g(d$Max_Phase, "NA")))
+        add(sprintf("   ChEMBL=%s | MW=%s | LogP=%s | PSA=%s | clinical_trials=%s | targets=%s",
+                    g(d$ChEMBL_ID, "NA"), g(d$MW, "NA"), g(d$LogP, "NA"), g(d$PSA, "NA"),
+                    g(d$Clinical_Trials, "0"), g(d$Targets, "NA")))
+        add("")
+    }
+    add("================================================================================")
+    add("INTERPRETATION GUIDANCE:")
+    add("  - Integrated Score combines therapeutic enrichment (|NES|^1.5) and brain")
+    add("    penetration (BBB, 0-1). Higher = stronger and more CNS-accessible.")
+    add("  - DSigDB GSEA NES < 0 = the drug signature OPPOSES the disease signature.")
+    add("  - BBB >= ", BBB_SCORE_THRESHOLD, " = plausible CNS penetration; lower needs a delivery strategy.")
+    add("  - Prioritise high Integrated Score + BBB >= ", BBB_SCORE_THRESHOLD, " + higher clinical phase.")
+    add("================================================================================")
+    txt_path <- file.path(out_dir, paste0(contrast, "_LLM_Drug_Discovery_Report.txt"))
+    writeLines(unlist(L), txt_path); cat("  wrote", txt_path, "\n")
+
+    # ---- HTML report ----
+    H <- c('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Drug Discovery</title><style>',
+           'body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#222}',
+           'h1{color:#2c3e50}h2{color:#34495e;border-bottom:2px solid #eee;padding-bottom:4px}',
+           'table{border-collapse:collapse;width:100%;font-size:13px}',
+           'th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}',
+           'th{background:#2c3e50;color:#fff}tr:nth-child(even){background:#f7f7f7}',
+           '.hi{background:#d5f5e3}.formula{background:#fef9e7;padding:8px;border-left:4px solid #f1c40f}',
+           '</style></head><body>',
+           paste0('<h1>Drug Discovery - U251 GBM (', esc(contrast), ')</h1>'),
+           paste0('<p>Generated: ', as.character(Sys.Date()), '</p>'),
+           '<div class="formula"><b>Integrated Score</b> = |NES|<sup>1.5</sup> &times; BBB penetration (higher = better)</div>',
+           paste0('<h2>Differential expression</h2><p>Up: <b>', n_up, '</b> &nbsp; Down: <b>', n_dn,
+                  '</b> &nbsp;(padj&lt;', padj_cut, ', |log2FC|&gt;', lfc_cut, ')</p>'))
+    if (!is.null(top_paths)) {
+        H <- c(H, '<h2>Top enriched pathways</h2><table><tr><th>#</th><th>Pathway</th><th>NES</th><th>FDR</th></tr>')
+        for (i in seq_len(nrow(top_paths)))
+            H <- c(H, paste0('<tr><td>', i, '</td><td>', esc(top_paths$ID[i]), '</td><td>',
+                             sprintf('%+.2f', top_paths$NES[i]), '</td><td>',
+                             signif(top_paths$p.adjust[i], 3), '</td></tr>'))
+        H <- c(H, '</table>')
+    }
+    if (!is.null(hubs) && length(hubs) > 0)
+        H <- c(H, paste0('<h2>PPI hub genes</h2><p>', esc(paste(head(hubs, 15), collapse = ", ")), '</p>'))
+    H <- c(H, '<h2>Top drug candidates</h2><table><tr><th>Rank</th><th>Drug</th><th>IntScore</th>',
+           '<th>NES</th><th>FDR</th><th>BBB</th><th>Phase</th><th>Targets</th></tr>')
+    for (i in seq_len(nrow(drug_df))) {
+        d <- drug_df[i, ]
+        cls <- if (!is.na(d$BBB_Score) && d$BBB_Score >= BBB_SCORE_THRESHOLD) ' class="hi"' else ''
+        H <- c(H, paste0('<tr', cls, '><td>', g(d$Rank, ""), '</td><td>', esc(d$Drug), '</td><td>',
+                         g(d$IntegratedScore, ""), '</td><td>', g(d$NES, ""), '</td><td>', g(d$FDR, ""),
+                         '</td><td>', g(d$BBB_Score, ""), '</td><td>', g(d$Max_Phase, ""),
+                         '</td><td>', esc(g(d$Targets, "")), '</td></tr>'))
+    }
+    H <- c(H, '</table></body></html>')
+    html_path <- file.path(out_dir, paste0(contrast, "_Drug_Discovery_Report.html"))
+    writeLines(H, html_path); cat("  wrote", html_path, "\n")
+    invisible(drug_df)
+}
+
+tryCatch(
+    write_drug_discovery_reports(drug_profiles, pathway_results, res_df, OUT_DIR, TARGET_CONTRAST),
+    error = function(e) cat("WARNING: drug-discovery report generation failed:",
+                            conditionMessage(e), "\n"))
