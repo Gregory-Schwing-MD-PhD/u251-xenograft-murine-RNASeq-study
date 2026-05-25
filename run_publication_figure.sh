@@ -153,9 +153,9 @@ done
 echo ""
 echo "Drug-discovery reports (optional):"
 for opt in \
-    "$OUT_DIR/${TARGET_CONTRAST}_LLM_Drug_Discovery_Report.txt" \
+    "$OUT_DIR/${TARGET_CONTRAST}_LLM_Analysis_Report.txt" \
     "$OUT_DIR/${TARGET_CONTRAST}_Drug_Profiles_Comprehensive.csv" \
-    "$OUT_DIR/${TARGET_CONTRAST}_Drug_Discovery_Report.html"; do
+    "$OUT_DIR/${TARGET_CONTRAST}_Analysis_Report.html"; do
     if [ -f "$opt" ]; then echo "✓ $opt"; else echo "○ not generated: $opt"; fi
 done
 
@@ -179,7 +179,7 @@ echo "Main Figure:"
 echo "  • PNG (high-res): $OUT_DIR/Publication_Figure_9Panel_VOLCANO_COMPLETE.png"
 echo "  • PDF (vector):   $OUT_DIR/Publication_Figure_9Panel_VOLCANO_COMPLETE.pdf"
 echo "  • Captions:       $OUT_DIR/Figure_Caption.txt"
-echo "  • LLM report:     $OUT_DIR/${TARGET_CONTRAST}_LLM_Drug_Discovery_Report.txt"
+echo "  • LLM report:     $OUT_DIR/${TARGET_CONTRAST}_LLM_Analysis_Report.txt  (all panels A-I)"
 echo "  • Drug CSV:       $OUT_DIR/${TARGET_CONTRAST}_Drug_Profiles_Comprehensive.csv"
 echo ""
 echo "Panel Layout (3×3 grid):"
