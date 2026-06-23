@@ -43,3 +43,7 @@ work/
 # SLURM logs written at the repo root by run_*.sh / submit_*.sh
 *.out
 *.err
+
+# Copyrighted reference PDFs the user grabs via library access for drafting
+# - keep the README so the repo records which papers to fetch
+manuscript/references/*.pdf

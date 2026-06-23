@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-This project addresses a critical gap in glioblastoma (GBM) modeling: the lack of longitudinal RNA-sequencing (RNAseq) datasets tracking tumor evolution through clinically relevant stages. Specifically, we investigate the transcriptomic shifts of U251 cells from **standard in vitro culture**, to **orthotopic growth** in the murine brain (Primary), and finally through **recurrence following Laser Interstitial Thermal Therapy (LITT)**.
+This project addresses a critical gap in glioblastoma (GBM) modeling: the lack of longitudinal RNA-sequencing (RNAseq) datasets tracking tumor evolution through clinically relevant stages. Specifically, we investigate the transcriptomic shifts of U251 cells from **standard in vitro culture**, to **orthotopic growth** in the rat brain (Primary), and finally through **recurrence following Laser Interstitial Thermal Therapy (LITT)**.
 
 While U251 is a widely used model, classic profiling shows that gene expression shifts substantially when implanted orthotopically, underscoring the dominance of the brain microenvironment. This project aims to quantify these adaptations and define the transcriptional consequences of focal thermal ablation.
 
@@ -129,8 +129,8 @@ chmod 600 ~/.gdrive_token
 ### Step 1 — Clone the repository
 
 ```bash
-git clone <repo-url> u251-xenograft-murine-RNASeq-study
-cd u251-xenograft-murine-RNASeq-study
+git clone <repo-url> u251-xenograft-rat-RNASeq-study
+cd u251-xenograft-rat-RNASeq-study
 ```
 
 ### Step 2 — Download raw FASTQs from Google Drive
